@@ -162,9 +162,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📬 Contact
 
-Your Name - [@yourtwitter](https://twitter.com/yourtwitter) - email@example.com
+Alex Karales - [@yourtwitter](https://x.com/alex_karales) - karales@gmail.com
 
-Project Link: [https://github.com/yourusername/summatra](https://github.com/yourusername/summatra)
+Project Link: [https://github.com/yourusername/summatra](https://github.com/akarales/summatra)
 
 ## 📈 Project Status
 
