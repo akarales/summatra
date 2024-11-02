@@ -1,12 +1,13 @@
 import subprocess
 import os
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, List
 import logging
 import json
 import time
 from pydub import AudioSegment
 from .utils import extract_video_id, ensure_sufficient_space, cleanup_temp_files
+from .pipeline import ProcessingStatus
 
 class VideoHandler:
     """Handles video download and audio processing operations"""
@@ -15,6 +16,7 @@ class VideoHandler:
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(exist_ok=True)
         self.logger = logging.getLogger('VideoHandler')
+        self._processing_status = ProcessingStatus.PENDING
         self.verify_dependencies()
 
     def verify_dependencies(self):
@@ -49,13 +51,15 @@ class VideoHandler:
         return video_dir
 
     def download_video(self, url: str, keep_video: bool = False) -> Optional[Dict]:
-        """Downloads video and audio with progress tracking"""
+        """Downloads video and audio with improved progress tracking"""
         try:
+            self._processing_status = ProcessingStatus.PROCESSING
             video_id = extract_video_id(url)
             video_dir = self.create_video_directory(video_id)
 
             # Check disk space (estimate 500MB per video)
             if not ensure_sufficient_space(500, self.download_dir):
+                self._processing_status = ProcessingStatus.FAILED
                 raise Exception("Insufficient disk space")
 
             self.logger.info("\n📥 Starting download process...")
@@ -63,6 +67,7 @@ class VideoHandler:
             # Get video information
             info = self._get_video_info(url)
             if not info:
+                self._processing_status = ProcessingStatus.FAILED
                 raise ValueError("Could not fetch video information")
 
             video_title = info.get('title', 'Unknown Title')
@@ -76,6 +81,7 @@ class VideoHandler:
             audio_file = self._download_audio_file(url, video_dir, video_id)
 
             if not video_file or not audio_file:
+                self._processing_status = ProcessingStatus.FAILED
                 raise Exception("Download failed")
 
             # Process audio for better quality
@@ -93,7 +99,8 @@ class VideoHandler:
                 'original_audio': str(audio_file),
                 'video_dir': str(video_dir),
                 'url': url,
-                'download_time': time.strftime('%Y-%m-%d %H:%M:%S')
+                'download_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'status': self._processing_status.value
             }
 
             # Save metadata
@@ -104,14 +111,16 @@ class VideoHandler:
                 self.logger.info(f"Deleting original video file: {video_file}")
                 video_file.unlink()
 
+            self._processing_status = ProcessingStatus.COMPLETED
             return result
 
         except Exception as e:
+            self._processing_status = ProcessingStatus.FAILED
             self.logger.error(f"\n❌ Download error: {str(e)}")
             return None
 
     def _get_video_info(self, url: str) -> Dict:
-        """Fetch video information"""
+        """Fetch video information with improved error handling"""
         try:
             result = subprocess.run(
                 ['yt-dlp', '--dump-json', url],
@@ -125,7 +134,7 @@ class VideoHandler:
             return {}
 
     def _download_video_file(self, url: str, video_dir: Path, video_id: str) -> Optional[Path]:
-        """Download video file"""
+        """Download video file with progress tracking"""
         try:
             self.logger.info("\n🎬 Downloading video file...")
             output_template = str(video_dir / f"{video_id}_video.%(ext)s")
@@ -165,7 +174,7 @@ class VideoHandler:
             return None
 
     def _download_audio_file(self, url: str, video_dir: Path, video_id: str) -> Optional[Path]:
-        """Download audio file"""
+        """Download audio file with progress tracking"""
         try:
             self.logger.info("\n🔊 Downloading audio file...")
             output_template = str(video_dir / f"{video_id}_audio.%(ext)s")
@@ -204,26 +213,25 @@ class VideoHandler:
             return None
 
     def _process_audio(self, audio_file: Path) -> Optional[Path]:
-        """Process audio file to improve quality"""
+        """Process audio file with improved quality"""
         try:
             self.logger.info("\n🎵 Processing audio...")
             
             # Create processed file path
             final_audio_file = audio_file.with_name(audio_file.stem + "_processed.m4a")
             
-            # Use ffmpeg directly for audio processing
+            # Use ffmpeg for audio processing
             cmd = [
                 'ffmpeg', '-y',
-                '-i', str(audio_file),      # Input file
-                '-acodec', 'aac',           # Use AAC codec
-                '-b:a', '192k',             # Bitrate
-                '-ar', '44100',             # Sample rate
-                '-af', 'volume=1.5',        # Normalize volume
-                '-movflags', '+faststart',  # Optimize for streaming
+                '-i', str(audio_file),
+                '-acodec', 'aac',
+                '-b:a', '192k',
+                '-ar', '44100',
+                '-af', 'volume=1.5',
+                '-movflags', '+faststart',
                 str(final_audio_file)
             ]
             
-            # Run ffmpeg command
             process = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -241,13 +249,14 @@ class VideoHandler:
 
         except Exception as e:
             self.logger.error(f"Error processing audio: {str(e)}")
-            self.logger.info("Using original audio file as fallback")
             return audio_file
 
     def _save_metadata(self, video_dir: Path, metadata: Dict):
-        """Save metadata to a JSON file"""
+        """Save metadata with processing status"""
         try:
             metadata_file = video_dir / 'metadata.json'
+            metadata.update({'processing_status': self._processing_status.value})
+            
             with open(metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, indent=4, ensure_ascii=False)
             self.logger.info(f"Metadata saved to: {metadata_file}")
@@ -268,15 +277,17 @@ class VideoHandler:
             self.logger.error(f"Error cleaning up files: {str(e)}")
 
     def get_download_status(self, video_id: str) -> Dict[str, Union[bool, str]]:
-        """Check download status for a video"""
+        """Check download status with processing state"""
         video_dir = self.download_dir / video_id
-        return {
+        status = {
             'exists': video_dir.exists(),
             'has_video': any(video_dir.glob(f"{video_id}_video.*")) if video_dir.exists() else False,
             'has_audio': any(video_dir.glob(f"{video_id}_audio.*")) if video_dir.exists() else False,
             'has_processed_audio': any(video_dir.glob(f"{video_id}_audio_processed.*")) if video_dir.exists() else False,
-            'status': 'complete' if all([
+            'processing_status': self._processing_status.value,
+            'status': ProcessingStatus.COMPLETED.value if all([
                 video_dir.exists(),
                 any(video_dir.glob(f"{video_id}_audio.*"))
-            ]) else 'incomplete'
+            ]) else ProcessingStatus.FAILED.value
         }
+        return status

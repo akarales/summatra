@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import sys
 import logging
 import argparse
@@ -9,6 +8,7 @@ import torch
 from rich.console import Console
 from rich.prompt import Confirm
 from rich.progress import Progress
+from rich.logging import RichHandler
 
 # Adjust system path for module imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -19,12 +19,9 @@ from src import (
     verify_ffmpeg_installation
 )
 
-# Adjust system path for module imports
-# sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-# from src.summarizer import VideoSummarizer
-# from src.utils import setup_logging, create_directory_structure, verify_ffmpeg_installation
-
 console = Console()
+# Initialize logger for main module
+logger = logging.getLogger(__name__)
 
 def parse_arguments():
     """Parse command line arguments"""
@@ -69,14 +66,6 @@ def parse_arguments():
     )
     return parser.parse_args()
 
-def is_valid_youtube_url(url: str) -> bool:
-    """Validate YouTube URL format"""
-    pattern = re.compile(
-        r'^(https?://)?(www\.)?'
-        r'(youtube\.com/watch\?v=|youtu\.be/)[\w-]+(&.*)?$'
-    )
-    return bool(re.match(pattern, url))
-
 def process_single_video(url: str, summarizer: VideoSummarizer, cleanup: bool = False) -> bool:
     """Process a single video URL"""
     try:
@@ -86,17 +75,15 @@ def process_single_video(url: str, summarizer: VideoSummarizer, cleanup: bool = 
         if result:
             processing_time = time.time() - start_time
             console.print(f"\n✅ Processing completed in {processing_time:.2f} seconds", style="green")
-            console.print(f"📁 Results saved to: {result['output_file']}", style="blue")
+            if 'output_file' in result:
+                console.print(f"📁 Results saved to: {result['output_file']}", style="blue")
             return True
         
         console.print("\n❌ Processing failed - check logs for details", style="red")
         return False
 
-    except KeyboardInterrupt:
-        console.print("\n⚠️ Processing interrupted by user", style="yellow")
-        return False
     except Exception as e:
-        logging.error(f"Error processing video: {str(e)}", exc_info=True)
+        logger.error(f"Error processing video: {str(e)}")
         return False
 
 def setup_gpu(args):
@@ -147,10 +134,6 @@ def interactive_mode(summarizer: VideoSummarizer):
             elif not command:
                 continue
 
-            if not is_valid_youtube_url(command):
-                console.print("❌ Invalid YouTube URL. Please try again.", style="red")
-                continue
-
             cleanup = Confirm.ask("🗑️ Clean up downloaded files?")
 
             if process_single_video(command, summarizer, cleanup):
@@ -164,7 +147,7 @@ def interactive_mode(summarizer: VideoSummarizer):
             console.print("\n⚠️ Operation cancelled", style="yellow")
             break
         except Exception as e:
-            logging.error(f"Interactive mode error: {str(e)}", exc_info=True)
+            logger.error(f"Interactive mode error: {str(e)}")
             console.print("\n❌ An error occurred. Please try again.", style="red")
 
 def main():
@@ -173,7 +156,7 @@ def main():
         # Setup basic structure and logging
         create_directory_structure()
         args = parse_arguments()
-        logger = setup_logging(verbose=args.verbose)
+        setup_logging(verbose=args.verbose)
 
         # Check system requirements
         if not verify_ffmpeg_installation():
@@ -210,7 +193,7 @@ def main():
         console.print("\n\n👋 Goodbye!", style="blue")
         sys.exit(0)
     except Exception as e:
-        logger.error(f"Application error: {str(e)}", exc_info=True)
+        logger.error(f"Application error: {str(e)}")
         sys.exit(1)
     finally:
         console.print("\n✨ Thank you for using Video Summarizer!", style="green")

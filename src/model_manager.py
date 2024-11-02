@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from pathlib import Path
 import sys
 import logging
@@ -12,14 +11,14 @@ import spacy
 import nltk
 from transformers import AutoTokenizer, AutoModel
 from .utils import load_json, save_json
-from .cuda_setup import configure_cuda, safe_cuda_operation, get_optimal_device
+from .pipeline import ProcessingStatus, GPUOptimizer
 
 class ModelManager:
     """Manages model downloads, updates, and version control for ML models"""
     
     def __init__(self, models_dir: str = "models"):
         """
-        Initialize model manager with CUDA support
+        Initialize model manager with enhanced GPU support
         
         Args:
             models_dir: Directory for model storage
@@ -32,64 +31,76 @@ class ModelManager:
         # Initialize version tracking
         self.load_version_info()
         
-        # Setup CUDA with lower memory fraction since this is just for model loading
+        # Setup GPU optimization
+        self.gpu_optimizer = GPUOptimizer(memory_fraction=0.5)
         try:
-            device_config = configure_cuda(memory_fraction=0.5)
-            self.device = device_config['device']
-            
-            if self.device == "cuda":
-                self.logger.info(f"Using GPU: {device_config.get('name', 'Unknown')}")
-                self.logger.info(f"Memory Allocated: {device_config.get('memory_allocated', 'Unknown')}")
+            if self.gpu_optimizer.setup():
+                self.device = "cuda"
+                gpu_info = self.gpu_optimizer.get_gpu_info()
+                self.logger.info(f"Using GPU: {gpu_info['name']}")
+                self.logger.info(f"Available Memory: {gpu_info['free_memory']:.2f}GB")
             else:
+                self.device = "cpu"
                 self.logger.info("Using CPU")
-                
         except Exception as e:
             self.logger.error(f"Error during CUDA setup: {str(e)}")
             self.device = "cpu"
             self.logger.info("Falling back to CPU")
 
     def load_version_info(self):
-        """Load model version information from file"""
+        """Load model version information with status tracking"""
         self.versions = load_json(self.version_file)
         if not self.versions:
             self.versions = {
-                'spacy': {'version': None, 'path': None},
-                'nltk': {'version': None, 'path': None},
-                'whisper': {'version': None, 'path': None},
-                'transformers': {'version': None, 'path': None},
-                'sentence_transformer': {'version': None, 'path': None}
+                'spacy': {
+                    'version': None, 
+                    'path': None,
+                    'status': ProcessingStatus.PENDING.value
+                },
+                'nltk': {
+                    'version': None, 
+                    'path': None,
+                    'status': ProcessingStatus.PENDING.value
+                },
+                'whisper': {
+                    'version': None, 
+                    'path': None,
+                    'status': ProcessingStatus.PENDING.value
+                },
+                'transformers': {
+                    'version': None, 
+                    'path': None,
+                    'status': ProcessingStatus.PENDING.value
+                },
+                'sentence_transformer': {
+                    'version': None, 
+                    'path': None,
+                    'status': ProcessingStatus.PENDING.value
+                }
             }
             self.save_version_info()
 
     def save_version_info(self):
-        """Save current model version information to file"""
+        """Save current model version information"""
         save_json(self.versions, self.version_file)
-
-    def safe_cuda_operation(self, operation: callable, fallback: Optional[callable] = None) -> any:
-        """
-        Safely execute CUDA operations with fallback
-        
-        Args:
-            operation: Function to execute
-            fallback: Optional fallback function for CPU execution
-        """
-        return safe_cuda_operation(operation, fallback)
 
     def download_spacy_model(self, force: bool = False) -> str:
         """
-        Download and setup spaCy model
+        Download and setup spaCy model with status tracking
         
         Args:
             force: Whether to force download even if model exists
         """
         try:
             model_name = "en_core_web_sm"
+            self.versions['spacy']['status'] = ProcessingStatus.PROCESSING.value
             
             # Check if we need to download
             if not force:
                 try:
                     nlp = spacy.load(model_name)
                     self.logger.info(f"Using existing spaCy model: {model_name}")
+                    self.versions['spacy']['status'] = ProcessingStatus.COMPLETED.value
                     return model_name
                 except:
                     pass
@@ -109,7 +120,8 @@ class ModelManager:
             # Update version info
             self.versions['spacy'] = {
                 'version': current_version,
-                'path': model_name
+                'path': model_name,
+                'status': ProcessingStatus.COMPLETED.value
             }
             self.save_version_info()
             
@@ -117,12 +129,14 @@ class ModelManager:
             return model_name
 
         except Exception as e:
+            self.versions['spacy']['status'] = ProcessingStatus.FAILED.value
+            self.save_version_info()
             self.logger.error(f"Error downloading spaCy model: {str(e)}")
             raise
 
     def download_nltk_data(self, force: bool = False) -> Path:
         """
-        Download required NLTK data packages
+        Download required NLTK data with status tracking
         
         Args:
             force: Whether to force download even if data exists
@@ -130,7 +144,7 @@ class ModelManager:
         nltk_dir = self.models_dir / 'nltk_data'
         nltk_dir.mkdir(parents=True, exist_ok=True)
         
-        # Add our custom directory to NLTK's search path
+        # Add custom directory to NLTK's search path
         nltk.data.path.insert(0, str(nltk_dir))
         
         required_packages = {
@@ -140,6 +154,7 @@ class ModelManager:
             'wordnet': 'corpora/wordnet'
         }
         
+        self.versions['nltk']['status'] = ProcessingStatus.PROCESSING.value
         self.logger.info("\nSetting up NLTK data...")
         
         try:
@@ -148,14 +163,14 @@ class ModelManager:
                 
                 try:
                     if not force:
-                        # Check if package already exists
+                        # Check if package exists
                         nltk.data.find(data_path)
                         self.logger.info(f"Package {package} already exists")
                         continue
                 except LookupError:
                     pass
                 
-                # Download the package to our custom directory
+                # Download the package
                 self.logger.info(f"Downloading {package}...")
                 success = nltk.download(
                     package,
@@ -168,7 +183,7 @@ class ModelManager:
                 
                 # Special handling for wordnet
                 if package == 'wordnet':
-                    # Also download omw-1.4 which is needed by wordnet
+                    # Download omw-1.4
                     nltk.download('omw-1.4', download_dir=str(nltk_dir), quiet=True)
                     
                     # Copy from user's home directory if needed
@@ -190,24 +205,29 @@ class ModelManager:
             # Update version info
             self.versions['nltk'] = {
                 'version': nltk.__version__,
-                'path': str(nltk_dir)
+                'path': str(nltk_dir),
+                'status': ProcessingStatus.COMPLETED.value
             }
             self.save_version_info()
                 
             return nltk_dir
             
         except Exception as e:
+            self.versions['nltk']['status'] = ProcessingStatus.FAILED.value
+            self.save_version_info()
             self.logger.error(f"Error downloading NLTK data: {str(e)}")
             raise
 
     def download_transformers_models(self, force: bool = False) -> Dict[str, str]:
         """
-        Download and cache required transformer models
+        Download and cache required transformer models with GPU optimization
         
         Args:
             force: Whether to force download even if models exist
         """
         try:
+            self.versions['transformers']['status'] = ProcessingStatus.PROCESSING.value
+            
             models = {
                 'summarizer': 'facebook/bart-large-cnn',
                 'sentiment': 'nlptown/bert-base-multilingual-uncased-sentiment'
@@ -219,53 +239,60 @@ class ModelManager:
                                              desc="Downloading transformer models"):
                 self.logger.info(f"Setting up {model_type} model: {model_name}")
                 
-                def download_model():
-                    # Download tokenizer and model to device
+                try:
+                    # Clean GPU memory before loading new model
+                    if self.device == "cuda":
+                        self.gpu_optimizer.cleanup()
+                    
+                    # Download tokenizer and model
                     tokenizer = AutoTokenizer.from_pretrained(model_name)
                     model = AutoModel.from_pretrained(model_name).to(self.device)
-                    return tokenizer, model
-                
-                # Use safe CUDA operation for model loading
-                tokenizer, model = self.safe_cuda_operation(
-                    download_model,
-                    lambda: (
-                        AutoTokenizer.from_pretrained(model_name),
-                        AutoModel.from_pretrained(model_name).to("cpu")
-                    )
-                )
-                
-                # Verify the downloads
-                if tokenizer is None or model is None:
-                    raise Exception(f"Failed to download {model_type} model")
-                
-                cached_models[model_type] = {
-                    'name': model_name,
-                    'path': tokenizer.name_or_path
-                }
-                
-                self.logger.info(f"✓ Successfully loaded {model_type} model")
-                
-                # Clean up GPU memory after each model
-                if self.device == "cuda":
-                    del model
-                    torch.cuda.empty_cache()
+                    
+                    # Verify the downloads
+                    if tokenizer is None or model is None:
+                        raise Exception(f"Failed to download {model_type} model")
+                    
+                    cached_models[model_type] = {
+                        'name': model_name,
+                        'path': tokenizer.name_or_path,
+                        'status': ProcessingStatus.COMPLETED.value
+                    }
+                    
+                    self.logger.info(f"✓ Successfully loaded {model_type} model")
+                    
+                    # Clean up GPU memory after each model
+                    if self.device == "cuda":
+                        del model
+                        self.gpu_optimizer.cleanup()
+                        
+                except Exception as e:
+                    self.logger.error(f"Error loading {model_type} model: {str(e)}")
+                    cached_models[model_type] = {
+                        'name': model_name,
+                        'path': None,
+                        'status': ProcessingStatus.FAILED.value,
+                        'error': str(e)
+                    }
             
             # Update version info
             self.versions['transformers'] = {
-                'version': None,  # Could get from transformers.__version__
-                'models': cached_models
+                'version': None,
+                'models': cached_models,
+                'status': ProcessingStatus.COMPLETED.value
             }
             self.save_version_info()
             
             return cached_models
 
         except Exception as e:
+            self.versions['transformers']['status'] = ProcessingStatus.FAILED.value
+            self.save_version_info()
             self.logger.error(f"Error downloading transformer models: {str(e)}")
             raise
 
     def setup_all_models(self, force: bool = False) -> Dict[str, str]:
         """
-        Download and setup all required models
+        Download and setup all required models with status tracking
         
         Args:
             force: Whether to force download even if models exist
@@ -293,18 +320,13 @@ class ModelManager:
             raise
 
     def check_updates_available(self) -> Dict[str, bool]:
-        """
-        Check for available updates for all models
-        
-        Returns:
-            Dictionary of models with available updates
-        """
+        """Check for available updates for all models"""
         updates = {}
 
         try:
             # Check spaCy
             if 'spacy' in self.versions:
-                current_version = self.versions['spacy']['version']
+                current_version = self.versions['spacy'].get('version')
                 if current_version:
                     meta = spacy.cli.info()
                     if meta.get('spacy_version') != current_version:
@@ -312,7 +334,7 @@ class ModelManager:
 
             # Check NLTK
             if 'nltk' in self.versions:
-                current_nltk = self.versions['nltk']['version']
+                current_nltk = self.versions['nltk'].get('version')
                 if current_nltk and nltk.__version__ != current_nltk:
                     updates['nltk'] = True
 
@@ -324,7 +346,7 @@ class ModelManager:
 
     def cleanup_models(self, models: Optional[List[str]] = None):
         """
-        Clean up downloaded models to free space
+        Clean up downloaded models with GPU optimization
         
         Args:
             models: Optional list of models to clean up. If None, clean all.
@@ -334,7 +356,7 @@ class ModelManager:
                 models = list(self.versions.keys())
 
             for model in models:
-                if model in self.versions and self.versions[model]['path']:
+                if model in self.versions and self.versions[model].get('path'):
                     path = Path(self.versions[model]['path'])
                     if path.exists():
                         if path.is_dir():
@@ -345,24 +367,23 @@ class ModelManager:
 
             # Reset version info for cleaned models
             for model in models:
-                self.versions[model] = {'version': None, 'path': None}
+                self.versions[model] = {
+                    'version': None,
+                    'path': None,
+                    'status': ProcessingStatus.PENDING.value
+                }
             self.save_version_info()
 
-            # Clear CUDA cache if using GPU
-            if self.device == "cuda":
-                torch.cuda.empty_cache()
+            # Clean up GPU memory
+            if hasattr(self, 'gpu_optimizer'):
+                self.gpu_optimizer.cleanup()
 
         except Exception as e:
             self.logger.error(f"Error cleaning up models: {str(e)}")
             raise
 
     def verify_model_setup(self) -> bool:
-        """
-        Verify all models are properly setup
-        
-        Returns:
-            Boolean indicating whether all models are properly setup
-        """
+        """Verify all models are properly setup"""
         try:
             # Verify spaCy
             self.logger.info("Verifying spaCy model...")
@@ -372,28 +393,25 @@ class ModelManager:
 
             # Verify NLTK
             self.logger.info("Verifying NLTK data...")
-            for package in ['punkt', 'averaged_perceptron_tagger', 'stopwords', 'wordnet']:
-                nltk.data.find(f'tokenizers/{package}' if package == 'punkt' else f'corpora/{package}')
+            required_packages = ['punkt', 'averaged_perceptron_tagger', 'stopwords', 'wordnet']
+            for package in required_packages:
+                path = f'tokenizers/{package}' if package == 'punkt' else f'corpora/{package}'
+                nltk.data.find(path)
             self.logger.info("✓ NLTK data verified")
 
             # Verify transformers
             self.logger.info("Verifying transformer models...")
-            def verify_transformers():
-                for model_info in self.versions['transformers'].get('models', {}).values():
+            transformer_models = self.versions.get('transformers', {}).get('models', {})
+            for model_info in transformer_models.values():
+                if model_info.get('status') == ProcessingStatus.COMPLETED.value:
                     tokenizer = AutoTokenizer.from_pretrained(model_info['name'])
                     model = AutoModel.from_pretrained(model_info['name']).to(self.device)
                     del model  # Clean up GPU memory
-                return True
+                    if self.device == "cuda":
+                        self.gpu_optimizer.cleanup()
             
-            success = self.safe_cuda_operation(
-                verify_transformers,
-                lambda: verify_transformers()  # Fall back to CPU verification
-            )
-            
-            if success:
-                self.logger.info("✓ Transformer models verified")
-                return True
-            return False
+            self.logger.info("✓ Transformer models verified")
+            return True
 
         except Exception as e:
             self.logger.error(f"Model verification failed: {str(e)}")
@@ -405,6 +423,42 @@ if __name__ == "__main__":
     try:
         manager = ModelManager()
         print(f"Initialized with device: {manager.device}")
-        manager.verify_model_setup()
+        
+        # Test GPU info if available
+        if manager.device == "cuda":
+            gpu_info = manager.gpu_optimizer.get_gpu_info()
+            print("\nGPU Information:")
+            print(f"Name: {gpu_info['name']}")
+            print(f"Total Memory: {gpu_info['total_memory']:.2f}GB")
+            print(f"Free Memory: {gpu_info['free_memory']:.2f}GB")
+            print(f"Compute Capability: {gpu_info['compute_capability']}")
+        
+        # Verify existing models
+        print("\nVerifying model setup...")
+        if manager.verify_model_setup():
+            print("✅ All models verified successfully")
+        else:
+            print("⚠️ Model verification failed")
+            
+        # Check for updates
+        print("\nChecking for updates...")
+        updates = manager.check_updates_available()
+        if updates:
+            print("Updates available for:", ", ".join(updates.keys()))
+        else:
+            print("All models are up to date")
+            
+        # Display model status
+        print("\nModel Status:")
+        for model_name, info in manager.versions.items():
+            status = info.get('status', ProcessingStatus.PENDING.value)
+            version = info.get('version', 'Unknown')
+            print(f"{model_name}: Status={status}, Version={version}")
+            
     except Exception as e:
         print(f"Test failed: {str(e)}")
+        logging.error(f"Test failed: {str(e)}", exc_info=True)
+    finally:
+        # Clean up resources
+        if 'manager' in locals():
+            manager.cleanup_models()
