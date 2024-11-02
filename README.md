@@ -164,10 +164,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Alex Karales - [@yourtwitter](https://x.com/alex_karales) - karales@gmail.com
 
-Project Link: [https://github.com/yourusername/summatra](https://github.com/akarales/summatra)
+Project Link: [https://github.com/akarales/summatra](https://github.com/akarales/summatra)
 
 ## 📈 Project Status
 
-SUMMATRA is under active development. Check our [Project Board](https://github.com/yourusername/summatra/projects) for planned features and current progress.
+SUMMATRA is under active development. Check our [Project Board](https://github.com/akarales/summatra/projects) for planned features and current progress.
 
 ---
