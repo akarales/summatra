@@ -1,13 +1,23 @@
 # SUMMATRA - Smart Universal Media Mining And Transcription Recognition Assistant
 
+<p align="center">
+  <img src="/api/placeholder/800/400" alt="SUMMATRA Logo"/>
+</p>
+
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CUDA Support](https://img.shields.io/badge/CUDA-11.x-green.svg)](https://developer.nvidia.com/cuda-toolkit)
 [![FFmpeg Required](https://img.shields.io/badge/FFmpeg-required-red.svg)](https://ffmpeg.org/)
+[![Website](https://img.shields.io/badge/website-karales.com-blue.svg)](https://karales.com)
+[![Twitter](https://img.shields.io/badge/X-alex__karales-black.svg)](https://x.com/alex_karales)
 
 ## 🎯 Overview
 
 SUMMATRA is a powerful, GPU-accelerated video content analysis tool that combines state-of-the-art machine learning models to provide comprehensive video understanding. It automatically transcribes, summarizes, and analyzes video content while generating detailed visualizations and insights.
+
+## 🔍 Demo
+
+![SUMMATRA Demo](/api/placeholder/600/300)
 
 ### 🚀 Key Features
 
@@ -20,19 +30,52 @@ SUMMATRA is a powerful, GPU-accelerated video content analysis tool that combine
 - **Memory Efficient**: Smart memory management for processing long videos
 - **Interactive Mode**: User-friendly command-line interface for easy interaction
 
-## 🛠️ Installation
+## 🏆 Features in Detail
 
-### Prerequisites
+### Transcription Engine
 
-- Python 3.9 or higher
-- CUDA Toolkit 11.x (for GPU support)
+- Powered by OpenAI's Whisper ASR system
+- Supports multiple languages
+- Optimized for various accents and speech patterns
+- Real-time transcription capabilities
+
+### Analysis Capabilities
+
+- Topic extraction and classification
+- Entity recognition
+- Sentiment analysis with temporal tracking
+- Key point summarization
+
+### Performance
+
+- GPU-accelerated processing with CUDA support
+- Multi-threading support
+- Memory-efficient chunking
+- Automatic resource optimization
+
+## 🚦 System Requirements
+
+### Minimum Requirements
+
+- Python 3.9+
+- 8GB RAM
+- 2GB GPU Memory (for GPU mode)
+- 10GB Disk Space
 - FFmpeg with required codecs
 
-### Quick Setup
+### Recommended
+
+- 16GB RAM
+- 6GB+ GPU Memory (NVIDIA)
+- 20GB SSD Storage
+- CUDA-compatible GPU
+- Ubuntu 20.04 or newer
+
+## 🛠️ Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/summatra.git
+git clone https://github.com/akarales/summatra.git
 cd summatra
 
 # Create and activate virtual environment
@@ -41,9 +84,6 @@ source venv/bin/activate  # On Windows: .\venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Run initial setup
-python setup.py install
 ```
 
 ### Optional: GPU Support
@@ -86,33 +126,34 @@ python main.py
 # - 'q' to quit
 ```
 
-## 📊 Output Examples
-
-### Transcription
+## 📈 Project Structure
 
 ```plaintext
-[Timestamp] Speaker: "Transcribed content of the video..."
+summatra/
+├── src/
+│   ├── content_processor.py
+│   ├── cuda_setup.py
+│   ├── model_manager.py
+│   ├── pipeline/
+│   │   ├── batch_processor.py
+│   │   ├── data_structures.py
+│   │   ├── gpu_optimizer.py
+│   │   └── __init__.py
+│   ├── summarizer.py
+│   ├── utils.py
+│   ├── video_handler.py
+│   └── __init__.py
+├── cache/            # Cache directory for models and temporary files
+├── downloads/        # Downloaded video files
+├── logs/            # Application logs
+├── models/          # Trained models and weights
+├── results/         # Output files and visualizations
+├── temp/            # Temporary processing files
+├── main.py          # Main application entry point
+├── requirements.txt # Project dependencies
+├── LICENSE
+└── README.md
 ```
-
-### Summary Analysis
-
-```json
-{
-  "summary": "Concise overview of video content...",
-  "key_points": ["Point 1", "Point 2", "Point 3"],
-  "sentiment": {
-    "overall": "positive",
-    "confidence": 0.85
-  }
-}
-```
-
-### Visualizations
-
-- Sentiment Timeline
-- Content Type Distribution
-- Key Concepts Word Cloud
-- Processing Performance Metrics
 
 ## 🔧 Advanced Configuration
 
@@ -139,9 +180,38 @@ models:
     min_length: 40
 ```
 
+## 🛣️ Roadmap
+
+### Short Term
+
+- [ ] Add support for batch processing
+- [ ] Implement real-time analysis mode
+- [ ] Enhance visualization options
+
+### Long Term
+
+- [ ] Create web interface
+- [ ] Add custom model training
+- [ ] Implement distributed processing
+
+## 💡 Use Cases
+
+- **Content Creation**: Automated video summarization and transcription
+- **Research**: Analysis of interview recordings and presentations
+- **Education**: Creating searchable lecture content
+- **Business**: Meeting analysis and documentation
+- **Media**: Content analysis and metadata generation
+
+## 🔐 Security
+
+- Data processed locally
+- No cloud dependencies
+- Optional encryption for sensitive content
+- Configurable data retention policies
+
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/akarales/summatra/issues).
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
@@ -160,14 +230,31 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [FFmpeg](https://ffmpeg.org/) for media processing
 - All other open-source contributors
 
-## 📬 Contact
+## 👤 Author
 
-Alex Karales - [@X.com](https://x.com/alex_karales) - karales@gmail.com
+### **Alex Karales**
 
-Project Link: [https://github.com/akarales/summatra](https://github.com/akarales/summatra)
+- Website: [karales.com](https://karales.com)
+- X (Twitter): [@alex_karales](https://x.com/alex_karales)
+- Email: karales@gmail.com
+- Github: [@akarales](https://github.com/akarales)
+
+## 🌍 Community
+
+- Follow development on [GitHub](https://github.com/akarales/summatra)
+- Read our [Blog](https://karales.com/blog/summatra)
+- Follow [@alex_karales](https://x.com/alex_karales) for updates
 
 ## 📈 Project Status
 
 SUMMATRA is under active development. Check our [Project Board](https://github.com/akarales/summatra/projects) for planned features and current progress.
 
 ---
+
+<p align="center">
+  <a href="https://karales.com">
+    <img src="/api/placeholder/200/50" alt="Karales.com"/>
+  </a>
+  <br>
+  Made with ❤️ by <a href="https://karales.com">Alex Karales</a>
+</p>
