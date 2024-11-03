@@ -19,6 +19,7 @@ from .pipeline import (
 from .content_processor import ContentProcessor
 from .model_manager import ModelManager
 from .video_handler import VideoHandler
+from .pdf_generator import PDFGenerator
 from .utils import (
     create_visualizations,
     add_visualization_to_summary,
@@ -32,14 +33,17 @@ console = Console()
 class VideoSummarizer:
     """Main video summarization class with optimized processing"""
     
-    def __init__(self, device: str = None, models_dir: str = "models"):
+    def __init__(self, device: str = None, models_dir: str = "models", results_dir: str = "results"):
         """Initialize video summarizer with optimized components"""
         self.models_dir = Path(models_dir)
+        self.results_dir = Path(results_dir)
         self.logger = logging.getLogger('VideoSummarizer')
         
         try:
             self.logger.info("Initializing video summarizer components...")
-            
+            # Create necessary directories
+            self.models_dir.mkdir(exist_ok=True)
+            self.results_dir.mkdir(exist_ok=True)
             # Setup device and GPU optimization
             self.gpu_optimizer = GPUOptimizer(memory_fraction=0.3)
             self.device = device if device else ('cuda' if self.gpu_optimizer.setup() else 'cpu')
@@ -392,6 +396,26 @@ class VideoSummarizer:
                 summary_info = add_visualization_to_summary(summary_info, visualization_path)
             else:
                 console.print("⚠️ Visualization generation failed", style="yellow")
+
+            # Generate PDF documents
+            console.print("\n📄 Generating PDF documents...", style="blue")
+            pdf_files = self.generate_pdf_documents(summary_info)
+            
+            if pdf_files:
+                console.print("\n✅ PDF documents generated successfully:", style="green")
+                for doc_type, path in pdf_files.items():
+                    console.print(f"  • {doc_type}: {path}", style="green")
+                
+                # Update summary info with PDF paths
+                summary_info['pdf_documents'] = {
+                    name: str(path) for name, path in pdf_files.items()
+                }
+                
+                # Update the saved JSON with PDF information
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    json.dump(summary_info, f, indent=4, ensure_ascii=False)
+            else:
+                console.print("⚠️ PDF generation failed", style="yellow")
             
             # Cleanup if requested
             if cleanup:
@@ -400,6 +424,16 @@ class VideoSummarizer:
             
             total_time = time.time() - start_time
             console.print(f"\n✅ Processing completed in {total_time:.2f} seconds", style="green")
+            
+            # Print summary of generated files
+            console.print("\n📁 Generated Files:", style="blue")
+            console.print(f"  • Summary JSON: {output_file}", style="green")
+            console.print(f"  • Transcript: {transcript_file}", style="green")
+            if visualization_path:
+                console.print(f"  • Visualizations: {visualization_path}", style="green")
+            if pdf_files:
+                for doc_type, path in pdf_files.items():
+                    console.print(f"  • {doc_type}: {path}", style="green")
             
             return summary_info
             
@@ -410,6 +444,59 @@ class VideoSummarizer:
             # Always cleanup GPU memory
             if self.device == 'cuda':
                 self.gpu_optimizer.cleanup()
+
+    def generate_pdf_documents(self, summary_info: Dict) -> Dict[str, Path]:
+        """
+        Generate PDF documents for summary, transcript, and visualizations
+        
+        Args:
+            summary_info: Dictionary containing analysis results
+            
+        Returns:
+            Dictionary containing paths to generated PDF files
+        """
+        try:
+            from .pdf_generator import PDFGenerator
+            
+            self.logger.info("\n📄 Generating PDF documents...")
+            pdf_generator = PDFGenerator(output_dir=self.results_dir)
+            
+            generated_files = {}
+            
+            # Generate summary PDF
+            console.print("\nGenerating summary PDF...", style="blue")
+            summary_pdf = pdf_generator.generate_summary_pdf(summary_info)
+            if summary_pdf:
+                generated_files['summary_pdf'] = summary_pdf
+                console.print(f"✅ Summary PDF generated: {summary_pdf}", style="green")
+            
+            # Generate transcript PDF
+            console.print("\nGenerating transcript PDF...", style="blue")
+            transcript_pdf = pdf_generator.generate_transcript_pdf(
+                summary_info['transcript'],
+                summary_info['video_info']
+            )
+            if transcript_pdf:
+                generated_files['transcript_pdf'] = transcript_pdf
+                console.print(f"✅ Transcript PDF generated: {transcript_pdf}", style="green")
+            
+            # Generate visualization report
+            console.print("\nGenerating visualization report...", style="blue")
+            vis_pdf = pdf_generator.generate_visualization_report(summary_info)
+            if vis_pdf:
+                generated_files['visualization_pdf'] = vis_pdf
+                console.print(f"✅ Visualization report generated: {vis_pdf}", style="green")
+            
+            # Add PDF paths to summary info
+            summary_info['pdf_documents'] = {
+                name: str(path) for name, path in generated_files.items()
+            }
+            
+            return generated_files
+            
+        except Exception as e:
+            self.logger.error(f"Error generating PDF documents: {str(e)}")
+            return {}
 
     def _generate_final_summary(self, transcript: str, video_info: Dict) -> Dict:
         """Generate summary using optimized batch processing"""
