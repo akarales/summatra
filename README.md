@@ -1,7 +1,7 @@
 # SUMMATRA - Smart Universal Media Mining And Transcription Recognition Assistant
 
 ![SUMMATRA Logo](/api/placeholder/800/400)
-
+![alt text](image.png)
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CUDA Support](https://img.shields.io/badge/CUDA-11.x-green.svg)](https://developer.nvidia.com/cuda-toolkit)
